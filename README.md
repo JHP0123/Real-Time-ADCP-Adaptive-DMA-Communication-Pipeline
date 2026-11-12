@@ -1,5 +1,7 @@
 # Real-Time ADCP (Adaptive DMA Communication Pipeline)
 
+__Working in Progress...__
+
 극한의 시스템 부하 상황에서도 수신 인터럽트를 동적으로 제어하여, 고우선순위 제어 태스크의 마감 시간(Deadline)을 보장하는 하드 리얼타임(Hard Real-Time) 통신 파이프라인.
 - 본 프로젝트는 제한된 자원(ex. CPU Core 1개)으로 예측 불가능한 고부하 극한 상황에서 발생할 수 있는 시스템 지연을 원천 차단하기 위해 설계. 통신 패킷이 짧은 주기로 쏟아지는 환경에서도 수신 인터럽트(ISR)의 간섭을 능동적으로 통제함으로써, 고우선순위 핵심 제어 태스크가 어떠한 방해 없이 안전하게 실행 마감 시간(Deadline)을 지키도록 보장.
 
