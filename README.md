@@ -71,12 +71,18 @@ Communication|Frame Rate|Baud Rate
 
 저속 및 고속 환경에서 기존 Interrupt / Polling 방식의 한계를 SystemView를 통해 확인하고 문제점을 도출.
 
+<div align="center">
+  <img src="./images/Interrupt.png" width="600px"><br>
+  <sub>Interrupt Method</sub>
+</div>
+
+<div align="center">
+  <img src="./images/polling.png" width="600px"><br>
+  <sub>Polling Method</sub>
+</div>
+
 - __저속 통신 환경 (115,200bps, 주기 4ms)__
   - 바이트 도착 간격이 약 86.8 µs
-
-<img width="1328" height="400" alt="image" src="https://github.com/user-attachments/assets/2868eacb-4f8a-4a27-a935-ddc94b4db45c" />
-
-
   - __Interrupt 방식__
     - TF-Luna의 바이트 수(9 byte)만큼 하드웨어 인터럽트(RXNE)가 발생.
     - 패킷당 바이트 단위(86.8 µs 간격)로 인터럽트가 발생하여 문맥 교환 오버헤드 및 CPU 소모 발생.
@@ -102,6 +108,16 @@ Communication|Frame Rate|Baud Rate
 ### 3. DMA 기반 아키텍처 도입
 
 고속 통신(921,600bps)에서의 Overrun을 방지하고 CPU 소모 문제를 해결하기 위해 DMA를 도입.
+
+<div align="center">
+  <img src="./images/dma-interrupt.png" width="600px"><br>
+  <sub>DMA & IDLE Detect Interrupt Method</sub>
+</div>
+
+<div align="center">
+  <img src="./images/dma-polling.png" width="600px"><br>
+  <sub>DMA & Polling Method</sub>
+</div>
 
 - __테스트 진행 중인 항목__
   - `4ms-115200bps/921600bps-DMA-Interrupt`
