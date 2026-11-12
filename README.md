@@ -66,7 +66,7 @@ Byte 8|Checksum|Lower 8 bits of the Sum of the Preceding 8 Bytes|`(Byte0 + Byte1
 
 ### 3. DMA 기반 아키텍처 도입
 
-고속 통신(921,600bps)에서의 Overrun(데이터 유실)을 방지하고 CPU 소모 문제를 해결하기 위해 DMA를 도입.
+고속 통신(921,600bps)에서의 Overrun을 방지하고 CPU 소모 문제를 해결하기 위해 DMA를 도입.
 
 - __테스트 완료 항목__
   - `4ms-921600bps-DMA-Interrupt`
@@ -74,9 +74,11 @@ Byte 8|Checksum|Lower 8 bits of the Sum of the Preceding 8 Bytes|`(Byte0 + Byte1
       - DMA 컨트롤러가 CPU 대신 패킷을 메모리(버퍼)에 직접 옮겨주고, 패킷 1개(9바이트)가 완전히 도착했을 때 IDLE line의 HIGH를 감지해 단 한 번의 Interrupt로 CPU(Task)에 알려줌.
     - 장점
       - Interrupt를 통해 고속 통신 환경에서 상대적으로 응답성이 높은 동시에 바이트 수신 중 CPU를 과도하게 소모하지 않고 하드웨어 Overrun(ORE)이 발생하지 않음.
-  - `4ms-921600bps-DMA-Polling`
+  - `4ms-921600bps-DMA-Polling-1ms/9ms`
     - 동작 원리
-      - DMA가 백그라운드에서 패킷을 메모리(Circular 링 버퍼)에  Byte Stream으로 옮겨두고, CPU는 매번 깨어나지 않고 가끔씩(자신의 스케줄에 맞춰) 버퍼 인덱스를 확인해 쌓여 있는 데이터에 대해 Batch Processing을 진행.
+      - DMA가 백그라운드에서 패킷을 메모리(Circular 링 버퍼)에 Byte Stream으로 옮겨두고, CPU는 매번 깨어나지 않고 가끔씩(자신의 스케줄에 맞춰) 버퍼 인덱스를 확인해 쌓여 있는 데이터에 대해 Batch Processing을 진행. Polling의 주기를 1ms 또는 9ms로 설정하여 진행.
+          - Polling의 주기를 1ms로 설정하면 4ms 주기 동안 4번의 polling 시도를 하며 그 중 1번 실제 데이터를 가져옴.
+          - Polling의 주기를 9ms로 설정하면 버퍼에 2~3개의 패킷이 적재되어 있어 매 polling마다 데이터를 가져옴. 
     - __ADCP 핵심 알고리즘 구현__
       - __Producer-Consumer 패턴__: DMA(생산자)가 하드웨어 수준에서 CPU 간섭 없이 Stream 데이터를 링 버퍼에 적재하고, Task(소비자)는 정해진 주기에 깨어나 버퍼에 쌓인 만큼만 소비.
       - __Sliding Window__: read_idx를 1바이트씩 옮기며 노이즈를 거르고 유실 바이트를 감지하여 불량 패킷은 버리고 패킷 헤더를 추적하여 패킷 파싱을 진행.
