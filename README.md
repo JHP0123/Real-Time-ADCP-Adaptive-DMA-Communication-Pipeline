@@ -8,7 +8,7 @@ __Working in Progress...__
 ## 🛠 Development Environment
 
 - MCU / Board: STM32F407G-DISC1
-  - D-Cache가 없어 DMA와 Cache Coherency 가능성 낮음
+  - D-Cache가 없어 DMA와 Cache Coherency Corruption 가능성 낮음
 - Sensor: TF-Luna LiDAR (1D 거리 측정 센서)
   - USART 기준 Packet 규격
 
