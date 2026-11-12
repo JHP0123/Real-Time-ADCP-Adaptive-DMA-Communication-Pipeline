@@ -114,6 +114,13 @@
 |---|---|
 | <img src="./images/Interrupt.png"> | <img src="./images/polling.png"> |
 
+### SystemView 캡처
+
+|Frame Rate / Baud Rate|Interrupt|Polling|
+|---|---|---|
+|4ms / 115200bps|<img src="./images/4ms-115200bps-interrupt.png">|<img src="./images/4ms-115200bps-polling.png">|
+|4ms / 921600bps|<img src="./images/4ms-921600bps-interrupt.png">|<img src="./images/4ms-921600bps-polling.png">|
+
 ### 방식별 비교
 
 | 방식 | 동작 | 저속 (115,200 bps) | 고속 (921,600 bps) |
@@ -123,9 +130,9 @@
 
 ### 문제점
 
-- **CPU 낭비**: 바이트마다 인터럽트가 발생하거나(Interrupt), 수신 내내 플래그를 감시해야 함(Polling)
+- **CPU 낭비**: 바이트마다 인터럽트가 발생하거나(Interrupt), USART 수신 버퍼가 1바이트뿐이라 수신 내내 플래그를 감시해야 함(Polling)
 - **Overrun 위험**: USART 수신 버퍼가 1바이트뿐이라(하드웨어 FIFO 없음) 다음 바이트가 오기 전에 읽지 못하면 ORE 발생
-- **고속에서 더 위험**: 초당 수신 바이트 수는 같지만 바이트당 허용 시간이 86.8 µs에서 10.85 µs로 줄어, RTOS critical section이나 다른 ISR로 인해 응답이 조금만 늦어도 ORE 발생
+- **고속에서 더 위험**: 초당 수신 바이트 수는 같지만 바이트당 허용 시간이 86.8 µs에서 10.85 µs로 줄어, RTOS critical section이나 다른 ISR로 인해 응답이 조금만 늦어도 ORE 발생 가능
 
 <!-- TODO: SystemView 캡처와 측정 수치(ISR 횟수, CPU 사용률, ORE 발생 여부) 추가 -->
 
@@ -139,6 +146,13 @@
 |---|---|
 | <img src="./images/dma-interrupt.png"> | <img src="./images/dma-polling.png"> |
 
+### SystemView 캡처
+
+|Frame Rate / Baud Rate|Interrupt|Polling 1ms|Polling 9ms|
+|---|---|---|---|
+|4ms / 115200bps|<img src="./images/4ms-115200bps-dma-interrupt.png">|<img src="./images/4ms-115200bps-dma-polling-1ms.png">|<img src="./images/4ms-115200bps-dma-polling-9ms.png">|
+|4ms / 921600bps|<img src="./images/4ms-921600bps-dma-interrupt.png">|<img src="./images/4ms-921600bps-dma-polling-1ms.png">|<img src="./images/4ms-921600bps-dma-polling-9ms.png">
+
 ### 두 방식 비교
 
 | 항목 | DMA + IDLE Interrupt | DMA + Polling (1 ms / 9 ms) |
@@ -146,9 +160,10 @@
 | 동작 | DMA가 버퍼에 적재, 패킷 수신 후 IDLE line 감지 시 인터럽트 1회 | DMA가 Circular 링 버퍼(64 B)에 계속 적재, Task가 주기적으로 인덱스 확인 후 Batch 처리 |
 | CPU 알림 | 패킷당 1회 (4 ms마다) | 인터럽트 없음 |
 | 장점 | 패킷 도착 즉시 처리 → 응답성 높음 | Task가 원하는 시점에 처리 → 고우선순위 Task 간섭 없음 |
-| 비고 | 바이트 단위 인터럽트 대비 인터럽트 수 1/9 (이론값) | 1 ms: 4번 중 1번 데이터 있음 / 9 ms: 매번 2 ~ 3개 패킷 적재 |
+| 비고 1 | 바이트 단위 인터럽트 대비 인터럽트 수 1/9 | 1 ms: 4번 중 1번 데이터 있음 / 9 ms: 매번 2 ~ 3개 패킷 적재 |
+| 비고 2 | - | - |
 
-### 파싱 알고리즘
+### 파싱 알고리즘 (DMA + Polling 방식 해당)
 
 | 기법 | 설명 |
 |---|---|
@@ -182,6 +197,14 @@ DMA로 통신상의 데이터 유실은 해결했지만, 실제 제어 시스템
 | 고부하 | 패킷 주기 짧게, 고우선순위 Task 실행 시간 김 | DMA + Interrupt는 간섭으로 Deadline Miss 유발, DMA + Polling은 Deadline 유지 |
 
 ### 6.2 Adaptive 파이프라인
+
+- **고부하 전환 기준 (Trigger)**: LiDAR 측정 거리 **1m 미만** (근접 위험 구역 진입 시)
+- **적응형 전환 메커니즘 (Adaptive Switch)**:
+  1. **부하 증가 감지**: 타겟(장애물)이 1m 이내로 근접하면, 회피 궤적 계산 및 모터 튜닝 등 최우선순위 제어 Task들의 연산량이 급증하며 실행 시간이 길어집니다. (우선순위가 높은 Dummy Task로 진행하게 되므로 LiDAR의 측정 거리가 1m 미만이 되면 점진적으로 실행 시간을 늘리는 방식으로 진행할 예정)
+  3. **Deadline Miss 위험 차단**: 이때 기존의 `DMA + Interrupt` 방식을 유지하면 잦은 수신 ISR이 제어 Task를 강제로 간섭(Preemption)하여 치명적인 Deadline Miss를 유발할 수 있습니다. (Deadline을 넘긴 Dummy Task는 그 횟수를 기록)
+  4. **Interrupt 마스킹 및 Polling 전환**: 시스템은 즉각 UART 수신 인터럽트를 차단하고 `DMA + Polling` 모드로 전환합니다.
+  5. **Deadline 보장**: 고우선순위 제어 Task들이 어떤 인터럽트의 방해도 받지 않고 안전하게 Deadline 내에 연산을 마칩니다. 이후 하위 우선순위의 통신 Task가 스케줄링되어 깨어날 때, DMA 링 버퍼에 안전하게 쌓여있던 패킷들을 한 번에 일괄 파싱(Batch Processing)합니다.
+
 
 | 모드 | 방식 | 동작 |
 |---|---|---|
