@@ -36,7 +36,36 @@ Byte 8|Checksum|Lower 8 bits of the Sum of the Preceding 8 Bytes|`(Byte0 + Byte1
 
 ### 1. 하드웨어 환경 구성 완료
 - STM32F407G-DISC1 및 TF-Luna 센서 하드웨어 결선 및 초기 설정 완료.
-[하드웨어 연결 및 핀 설정 상세 설명, Frequency 표기]
+
+Voltage and Current of each Hardware
+
+Hardware|Voltage|Consumption/Supply Electrical Current|Description
+---|---|---|---
+9V 1A Adoptor|9V|Max 1A supply|Convert 220v ➔ 9V
+HW-131 Power Module|5V / 3.3V Converter|Max 700mA supply|Convert 9V ➔ 5V / 3.3V
+TF-Luna LiDAR|5V (Communication 3.3V)|Avg 70mA / Max 150mA|5V for power / 3.3V for communication with the MCU
+STM32F407G-DISC1|3.3V|Max 20 ~ 25mA per pin|Main board for this project
+
+Pin Arrangement
+
+Hardware|STM32F407 Pin|Bread Board
+---|---|---
+TF-Luna LiDAR|RXD ➔ PA2 / TXD ➔ PA3|GND ➔ (-) / VCC 5V ➔ (+)
+Common GND|GND|GND
+
+MCU Frequency
+
+Bus|Frequency|Peripheral
+---|---|---
+AHB 1 Bus(SYSCLK)|168MHz|-
+APB 1 Bus(APB 1 Peripheral Clock)|42MHz|PA2 (AF7: USART2_TX) / PA3 (AF7: USART2_RX)
+
+TF-Luna Frequency
+
+Communication|Frame Rate|Baud Rate
+---|---|---
+저속 통신|250Hz|115200bps
+고속 통신|250Hz|921600bps
 
 ### 2. 순수 USART 통신 속도별 동작 분석 (SystemView 검증)
 
