@@ -1,190 +1,228 @@
 # Real-Time ADCP (Adaptive DMA Communication Pipeline)
 
-__Working in Progress...__
-
-## Table of Contents
-1. [About The Project](#-about-the-project)
-2. [Motivation & Core Features](#-motivation--core-features)
-3. [Development Environment](#-development-environment)
-4. [Project Progress](#-project-progress)
-5. [Future Plans](#-future-plans)
-6. [License](#license)
-
-## About the Project
 극한의 시스템 부하 상황에서도 수신 인터럽트를 동적으로 제어하여, 고우선순위 제어 태스크의 마감 시간(Deadline)을 보장하는 하드 리얼타임(Hard Real-Time) 통신 파이프라인.
 - 본 프로젝트는 제한된 자원(ex. CPU Core 1개)으로 예측 불가능한 실행 고부하 상황에서 발생할 수 있는 시스템 지연을 원천 차단하기 위해 설계. 통신 패킷이 짧은 주기로 쏟아지는 환경에서도 수신 인터럽트(ISR)의 간섭을 능동적으로 통제함으로써, 고우선순위 핵심 제어 태스크가 어떠한 방해 없이 안전하게 실행 마감 시간(Deadline)을 지키도록 보장.
+> 최종 목표는 시스템 부하에 따라 **DMA + IDLE Interrupt(저부하)** 와 **DMA + Polling(고부하)** 을 자동 전환하는 것입니다.
 
-## Motivation & Core Features
+<!-- TODO: 소스 코드(STM32CubeIDE 프로젝트) 업로드 -->
 
-### 배경 및 동기
-- 일반적인 임베디드 시스템은 센서 데이터 수신 시 매 바이트마다 하드웨어 인터럽트를 발생시키거나, 지속적으로 상태를 확인해야 함. 이는 통신 속도 및 주기를 높일수록 CPU 자원 낭비와 Context Switch 오버헤드를 유발. 
-- Multi-Tasking RTOS 환경에서는, 많은 수신 인터럽트가 핵심 제어 태스크들의 실행을 방해하여 Deadline을 놓치는 물제으로 이어질 수 있음.
+### 진행 상태
 
-### 핵심 해결 전략
-1. **DMA Zero-Copy 수신**: CPU 간섭 없이 DMA가 직접 메모리에 센서 데이터를 저장하여 CPU 점유율을 최소화.
-2. **무손실 Sliding Window 파싱**: TCP/IP의 Byte Stream 원리를 이용하여, 쪼개진 패킷과 노이즈 속에서도 패킷 데이터를 재조립.
-3. **Adaptive 인터럽트 제어**: CPU 부하가 낮을 때는 빠른 응답성을 위해 인터럽트를 허용하고, 고부하 환경에서는 수신 인터럽트를 차단한 뒤 Task 기반의 Batch Processing으로 자동 전환.
+| 단계 | 내용 | 상태 |
+|---|---|---|
+| 1 | 하드웨어 구성 (STM32F407 + TF-Luna) | ✅ 완료 |
+| 2 | 순수 USART Interrupt / Polling 분석 | ✅ 완료 |
+| 3 | DMA + IDLE Interrupt / DMA + Polling 구현 | 🔄 테스트 중 |
+| 4 | Multi-Tasking 고부하 시나리오 실험 | ⏳ 계획 |
+| 5 | Adaptive 전환 메커니즘 | ⏳ 계획 |
 
-## 🛠 Development Environment
+## 목차
 
-- MCU / Board: STM32F407G-DISC1
-  - D-Cache가 없어 DMA와 Cache Coherency Corruption 가능성 낮음
-- Sensor: TF-Luna LiDAR (1D 거리 측정 센서)
-  - USART 기준 Packet 규격
+1. [About the Project](#1-about-the-project)
+2. [Development Environment](#2-development-environment)
+3. [Phase 1 — 순수 USART 수신 분석](#3-phase-1--순수-usart-수신-분석)
+4. [Phase 2 — DMA 기반 아키텍처](#4-phase-2--dma-기반-아키텍처)
+5. [Phase 3 — Multi-Tasking 환경의 문제](#5-phase-3--multi-tasking-환경의-문제)
+6. [Roadmap](#6-roadmap)
+7. [Known Issues](#7-known-issues)
+8. [License](#8-license)
 
-Byte No.|Field Name|Description|Value
----|---|---|---
-Byte 0|Header 1|Frame Start Identifier|`0x59`
-Byte 1|Header 1|Frame Start Identifier|`0x59`
-Byte 2|Dist_Low|Distance Value(Low Byte)|`Distance = Dist_Low + Dist_High << 8`
-Byte 3|Dist_High|Distance Value(High Byte)|`Distance = Dist_Low + Dist_High << 8`
-Byte 4|Strength_Low|Signal Strength(Low Byte)|`Strength = Strength_Low + Strength_High << 8`
-Byte 5|Strength_High|Signal Strength(High Byte)|`Strength = Strength_Low + Strength_High << 8`
-Byte 6|Temp_Low|Internal Temperature(Low Byte)|`Temp`(°C) `= (Temp_Low + Temp_High << 8) / 8.0 - 256.0`
-Byte 7|Temp_High|Internal Temperature(High Byte)|`Temp`(°C) `= (Temp_Low + Temp_High << 8) / 8.0 - 256.0`
-Byte 8|Checksum|Lower 8 bits of the Sum of the Preceding 8 Bytes|`(Byte0 + Byte1 + ... + Byte7) & 0xFF`
+---
 
-- IDE: STM32CubeIDE 1.19.0
-  - STM32CubeMX 통합 (.ioc)
-- RTOS: FreeRTOS v202411.00
-- Debugging / Profiling: SystemView V4.10b (J-Link 연결)
-  - 실행 과정을 Continuous Mode로 기록
-- Sensor Viewer: Benewake LiDAR Viewer
-  - TF-Luna의 Frame Rate, Baud Rate 설정 
+## 1. About the Project
 
-## 🚀 Project Progress (현재 진행 상황)
+### 배경
 
-### 1. 하드웨어 환경 구성 완료
-- STM32F407G-DISC1 및 TF-Luna 센서 하드웨어 결선 및 초기 설정 완료.
+- 일반적인 임베디드 시스템은 센서 데이터를 받을 때 **바이트마다 하드웨어 인터럽트**를 발생시키거나, 상태를 **계속 확인(Polling)** 해야 합니다.
+- 통신 속도가 빨라질수록 바이트당 처리 허용 시간이 줄어 Overrun 위험이 커집니다.
+- Multi-Tasking RTOS 환경에서는 잦은 수신 인터럽트가 핵심 제어 Task의 실행을 방해해 Deadline Miss로 이어질 수 있습니다.
 
-Voltage and Current of each Hardware
+### 핵심 전략
 
-Hardware|Voltage|Consumption/Supply Electrical Current|Description
----|---|---|---
-9V 1A Adoptor|9V|Max 1A supply|Convert 220v ➔ 9V
-HW-131 Power Module|5V / 3.3V Converter|Max 700mA supply|Convert 9V ➔ 5V / 3.3V
-TF-Luna LiDAR|5V (Communication 3.3V)|Avg 70mA / Max 150mA|5V for power / 3.3V for communication with the MCU
-STM32F407G-DISC1|3.3V|Max 20 ~ 25mA per pin|Main board for this project
+| 전략 | 설명 | 상태 |
+|---|---|---|
+| **DMA 수신** | CPU 개입 없이 DMA가 센서 데이터를 메모리(링 버퍼)에 직접 적재 | ✅ |
+| **Sliding Window 파싱** | Byte Stream에서 헤더를 추적해 쪼개진 패킷과 노이즈 속에서도 프레임 경계를 복구 | ✅ |
+| **Adaptive 인터럽트 제어** | 저부하에는 인터럽트로 빠르게 응답, 고부하에는 수신 인터럽트를 차단하고 Task 기반 Batch Processing으로 전환 | ⏳ |
 
-Pin Arrangement
+---
 
-Hardware|STM32F407 Pin|Bread Board
----|---|---
-TF-Luna LiDAR|RXD ➔ PA2 / TXD ➔ PA3|GND ➔ (-) / VCC 5V ➔ (+)
-Common GND|GND|GND
+## 2. Development Environment
 
-MCU Frequency
+| 구분 | 내용 |
+|---|---|
+| MCU / Board | STM32F407G-DISC1 (D-Cache가 없어 DMA Cache Coherency 문제 가능성 낮음) |
+| Sensor | TF-Luna LiDAR (1D 거리 측정, UART) |
+| IDE | STM32CubeIDE 1.19.0 (STM32CubeMX `.ioc` 통합) |
+| RTOS | FreeRTOS v202411.00 |
+| Profiling | SEGGER SystemView V4.10b (J-Link, Continuous Mode 기록) |
+| Sensor Tool | Benewake LiDAR Viewer (TF-Luna Frame Rate, Baud Rate 설정) |
 
-Bus|Frequency|Peripheral
----|---|---
-AHB 1 Bus(SYSCLK)|168MHz|-
-APB 1 Bus(APB 1 Peripheral Clock)|42MHz|PA2 (AF7: USART2_TX) / PA3 (AF7: USART2_RX)
+### TF-Luna 패킷 규격 (UART, 9 Byte)
 
-TF-Luna Frequency
+| Byte | Field | 설명 | 값 |
+|---|---|---|---|
+| 0 | Header 1 | Frame Start | `0x59` |
+| 1 | Header 2 | Frame Start | `0x59` |
+| 2 – 3 | Dist_L / Dist_H | 거리 | `Dist_L \| (Dist_H << 8)` |
+| 4 – 5 | Strength_L / Strength_H | 신호 세기 | `Strength_L \| (Strength_H << 8)` |
+| 6 – 7 | Temp_L / Temp_H | 내부 온도 | `(Temp_L \| (Temp_H << 8)) / 8.0 - 256.0` (°C) |
+| 8 | Checksum | 앞 8바이트 합의 하위 8bit | `(Byte0 + … + Byte7) & 0xFF` |
 
-Communication|Frame Rate|Baud Rate
----|---|---
-저속 통신|250Hz|115200bps
-고속 통신|250Hz|921600bps
+<details>
+<summary>🔌 하드웨어 구성 (전원 · 핀 · 클럭 · 통신 설정)</summary>
 
-### 2. 순수 USART 통신 속도별 동작 분석 (SystemView 검증)
+#### 전원
 
-저속 및 고속 환경에서 기존 Interrupt / Polling 방식의 한계를 SystemView를 통해 확인하고 문제점을 도출.
+| Hardware | Voltage | 전류 | 설명 |
+|---|---|---|---|
+| 9V 1A Adapter | 9V | 최대 1A 공급 | 220V → 9V |
+| HW-131 Power Module | 5V / 3.3V | 최대 700mA 공급 | 9V → 5V / 3.3V |
+| TF-Luna LiDAR | 5V (통신 3.3V) | 평균 70mA / 최대 150mA | 전원 5V, MCU와 통신 3.3V |
+| STM32F407G-DISC1 | 3.3V | 핀당 최대 20 ~ 25mA | 메인 보드 |
 
-<div align="center">
-  <img src="./images/Interrupt.png" width="600px"><br>
-  <sub>Interrupt Method</sub>
-</div>
+#### 핀 배치
 
-<div align="center">
-  <img src="./images/polling.png" width="600px"><br>
-  <sub>Polling Method</sub>
-</div>
+| Hardware | STM32F407 Pin | Breadboard |
+|---|---|---|
+| TF-Luna LiDAR | RXD → PA2 (USART2_TX) / TXD → PA3 (USART2_RX) | GND → (−) / VCC 5V → (+) |
+| Common GND | GND | GND |
 
-- __저속 통신 환경 (115,200bps, 주기 4ms)__
-  - 바이트 도착 간격이 약 86.8 µs
-  - __Interrupt 방식__
-    - TF-Luna의 바이트 수(9 byte)만큼 하드웨어 인터럽트(RXNE)가 발생.
-    - 패킷당 바이트 단위(86.8 µs 간격)로 인터럽트가 발생하여 문맥 교환 오버헤드 및 CPU 소모 발생.
-  - __Polling 방식__
-    - 방식: CPU가 상태 플래그 RXNE(RXNEIE 비활성화)를 계속 확인(Spin Wait)하며 DR 레지스터에서 직접 바이트를 가져가는 방식.
-    - Polling을 활용할 경우, USART의 Data Recieve Reigster는 1개(16byte Reserved, 16byte Use)만 사용하므로 polling 간격을 미세하게 두지 않는 이상 Overrun Error가 발생할 확률이 존재. Polling 주기를 86.8 µs 미만으로 잡아야 안전. 이 실험에서는 Spin Wait으로 진행.
-    - 패킷 수신 내내 상태 플래그(RXNE)를 확인해야 하므로 CPU 자원의 심각한 낭비 발생.
+#### MCU 클럭
 
-- __고속 통신 환경 (921,600bps, 주기 4ms)__
-  - 바이트 도착 간격이 10.85 µs로 극단적으로 짧아짐.
-  - __Interrupt 방식__
-    - 10.85 µs 안에 ISR을 처리해야 함. 
-    - 바이트 단위 하드웨어 인터럽트의 ISR 소요 시간은 약 6.5 ~ 6.6 µs 소요. 
-    - Single-Task인 경우 정상 동작하지만 Multi-Tasking인 경우 Context Switch의 오버헤드가 증가해 Overrun Error가 발생할 확률이 높아짐.
-    - ISR로 인한 CPU 소모. 
-  - __Polling 방식__
-    - 저속 통신 환경에서 polling 방식과 비슷하지만 바이트 도착 간격이 약 10.85 µs으로 짧아졌고 data register가 1개 밖에 없어 촘촘한 polling 또는 Spin Wait을 하지 않는 이상 Overrun Error가 발생할 확률이 더 높아짐.
-  - CPU 자원의 심각한 낭비 발생.
-- __분석 (문제점)__
-  - 저속 통신의 비효율: 매 바이트마다 하드웨어 인터럽트 발생 및 상태 플래그 상시 감시로 CPU 소모 및 ORE 발생 가능.
-  - 고속 통신의 비효율: 바이트 도착 간격이 10.85 µs로 짧아져 ORE 발생 가능성이 더 높아지고 높은 CPU 소모 발생.
+| Bus | Frequency | Peripheral |
+|---|---|---|
+| AHB1 (SYSCLK) | 168 MHz | – |
+| APB1 | 42 MHz | PA2 (AF7: USART2_TX) / PA3 (AF7: USART2_RX) |
 
-### 3. DMA 기반 아키텍처 도입
+#### TF-Luna 통신 설정
 
-고속 통신(921,600bps)에서의 Overrun을 방지하고 CPU 소모 문제를 해결하기 위해 DMA를 도입.
+| 구분 | Frame Rate | Baud Rate | 바이트 도착 간격 |
+|---|---|---|---|
+| 저속 | 250 Hz (4 ms) | 115,200 bps | 약 86.8 µs |
+| 고속 | 250 Hz (4 ms) | 921,600 bps | 약 10.85 µs |
 
-<div align="center">
-  <img src="./images/dma-interrupt.png" width="600px"><br>
-  <sub>DMA & IDLE Detect Interrupt Method</sub>
-</div>
+</details>
 
-<div align="center">
-  <img src="./images/dma-polling.png" width="600px"><br>
-  <sub>DMA & Polling Method</sub>
-</div>
+---
 
-- __테스트 진행 중인 항목__
-  - `4ms-115200bps/921600bps-DMA-Interrupt`
-    - 동작 원리
-      - DMA 컨트롤러가 CPU 대신 패킷을 메모리(버퍼)에 직접 옮겨주고, 패킷 1개(9바이트)가 완전히 도착했을 때 IDLE line의 HIGH를 감지해 단 한 번의 Interrupt로 CPU(Task)에 알려줌.
-      - 패킷 1개 당 IDLE 감지 Interrupt 발생 ➔ TF-Luna Frame Rate인 4ms마다 Interrupt 발생.
-    - 장점
-      - Interrupt를 통해 고속 통신 환경에서 상대적으로 응답성이 높은 동시에 바이트 수신 중 CPU를 과도하게 소모하지 않고 Interrupt 1번 만으로 하드웨어 Overrun(ORE)이 발생하지 않을 것으로 예정.
-  - `4ms-115200bps/921600bps-DMA-Polling-1ms/9ms`
-    - 동작 원리
-      - DMA가 백그라운드에서 패킷을 메모리(Circular 링 버퍼)에 Byte Stream으로 옮겨두고, CPU는 매번 깨어나지 않고 가끔씩(자신의 스케줄에 맞춰) 버퍼 인덱스를 확인해 쌓여 있는 데이터에 대해 Batch Processing을 진행. Polling의 주기를 1ms 또는 9ms로 설정하여 진행 중.
-          - Polling의 주기를 1ms로 설정하면 4ms 주기 동안 4번의 polling 시도를 하며 그 중 1번 실제 데이터를 가져옴.
-          - Polling의 주기를 9ms로 설정하면 버퍼에 2~3개의 패킷이 적재되어 있어 매 polling마다 데이터를 가져옴. 
-    - __ADCP 핵심 알고리즘 구현__
-      - __Producer-Consumer 패턴__: DMA(생산자)가 하드웨어 수준에서 CPU 간섭 없이 Stream 데이터를 링 버퍼에 적재하고, Task(소비자)는 정해진 주기에 깨어나 버퍼에 쌓인 만큼만 소비.
-      - __Sliding Window__: read_idx를 1바이트씩 옮기며 노이즈를 거르고 유실 바이트를 감지하여 불량 패킷은 버리고 패킷 헤더를 추적하여 패킷 파싱을 진행.
-      - __TCP 고안 Byte Stream 신뢰성 적용__: 패킷 경계가 쪼개진 데이터들도 선형 탐지 과정을 통해 9바이트 패킷으로 재조립해 내는 무손실 아키텍처를 고안 및 적용.
+## 3. Phase 1 — 순수 USART 수신 분석
 
-### 4. 현실적인 Multi-Tasking 및 가변 실행시간/주기 환경에서의 문제
+기존 Interrupt / Polling 방식의 한계를 SystemView로 확인했습니다.
 
-DMA 도입으로 통신상의 데이터 유실 문제는 해결했으나, 실제 임베디드 제어 시스템에서는 추가적인 동적 변수들이 존재.
+| Interrupt | Polling |
+|---|---|
+| <img src="./images/Interrupt.png"> | <img src="./images/polling.png"> |
 
-- __다중 Task 우선순위 간섭__: 시스템 내에는 통신보다 우선순위가 훨씬 높은 핵심 제어 Task들이 존재하며, 상황에 따라 이들의 연산 부하(실행 시간)는 지속적으로 변동
-- __고정 주기 처리의 자원 낭비__: 드론/로봇 환경에서는 상황에 따라 동적으로 데이터가 필요(충돌 위험이 낮을 때는 저빈도, 근접 시에는 고빈도). 4ms 주기로 들어오는 센서 데이터를 항상 즉각 처리하는 것은 불필요한 자원 낭비.
-  - (현재 STM32F4보드에서 TF-Luna에게 주기 변경 명령어가 먹히지 않는 상황 발생... 현재 해결 중....)
-- __실험의 필요성__: '제어 Task의 동적 부하'와 '가변적인 패킷 수신 주기'가 혼재하는 환경에서 DMA + Interrupt와 DMA + Polling 방식이 각각 시스템 안정성에 어떤 영향을 미치는지 대조 검증이 필요.
+### 방식별 비교
 
-## 🎯 Future Plans (향후 계획)
+| 방식 | 동작 | 저속 (115,200 bps) | 고속 (921,600 bps) |
+|---|---|---|---|
+| **Interrupt** | 바이트마다 RXNE 인터럽트 → ISR에서 1바이트씩 수집 | 패킷당 9회 인터럽트 (86.8 µs 간격) | 패킷당 9회 인터럽트. ISR이 약 6.5 ~ 6.6 µs라 **10.85 µs 안에 응답하지 못하면 ORE** |
+| **Polling** | `RXNEIE` 비활성화, CPU가 RXNE 플래그를 Spin Wait하며 DR에서 직접 읽음 | 86.8 µs 이내로 확인해야 ORE 방지 | 10.85 µs 이내로 확인해야 해서 ORE 위험 증가 |
 
-현재의 DMA 파이프라인을 바탕으로, 실제 임베디드 Multi-Tasking 환경에서의 task들의 deadline을 지키기 위한 __적응형 제어 메커니즘__ 을 완성해 나갈 계획.
+### 문제점
 
-### 1. Multi-Tasking 및 가변 실행시간(고부하/저부하)/주기 환경 시나리오 실험
-- 가설 검증 (SystemView 활용):
-  - 여유 상황 (저부하): DMA + Interrupt와 DMA + Polling 모두 최상위 제어 Task에 지장을 주지 않고 동작하는지 확인. 패킷 주기도 길게 설정하여 불필요한 중복 패킷을 방지.
-  - 극한 상황 (고부하): 패킷의 주기가 짧아지고 고우선순위 Task 실행 시간이 길어질 때, DMA + Interrupt가 강제 간섭하여 Deadline Miss 및 시스템 다운을 유발하는지 증명. 반면, DMA + Polling은 인터럽트 간섭 없이 안전하게 최상위 Task의 Deadline을 지켜내는지 대조 실험 진행.
-- 실행 방법
-  - 우선순위가 높은 Dummy Task 여러 개를 만들어 진행할 예정.
+- **CPU 낭비**: 바이트마다 인터럽트가 발생하거나(Interrupt), 수신 내내 플래그를 감시해야 함(Polling)
+- **Overrun 위험**: USART 수신 버퍼가 1바이트뿐이라(하드웨어 FIFO 없음) 다음 바이트가 오기 전에 읽지 못하면 ORE 발생
+- **고속에서 더 위험**: 초당 수신 바이트 수는 같지만 바이트당 허용 시간이 86.8 µs에서 10.85 µs로 줄어, RTOS critical section이나 다른 ISR로 인해 응답이 조금만 늦어도 ORE 발생
 
-### 2. 적응형(Adaptive) 통신 파이프라인 구축
-- 저부하 모드 (DMA + IDLE Interrupt):
-  - 시스템 리소스에 여유가 있는 상황(일반 주행 등)에서는 패킷 도착 즉시 데이터를 처리하여 빠른 응답성(정밀한 거리 데이터)을 확보.
-  - 패킷 주기를 길게 설정하여 불필요한 패킷 처리 X
-- 고부하 모드 (DMA + Polling):
-  - 복잡한 회피 알고리즘 연산 등으로 CPU 부하가 심해지면, 능동적으로 UART 수신 인터럽트(IDLE 포함)를 차단.
-  - DMA 링 버퍼의 크기를 넉넉하게 잡고 이를 활용해 통신 Task의 주기를 늦추고, 고우선순위 제어 작업이 끝난 후 남은 IDLE 시간에 데이터를 일괄 처리(Batch Processing)하여 CPU 오버헤드를 최소화.
+<!-- TODO: SystemView 캡처와 측정 수치(ISR 횟수, CPU 사용률, ORE 발생 여부) 추가 -->
 
-__최종 지향점__: 고정된 단일 통신 방식에 얽매이지 않고, 시스템 부하와 외부 환경에 맞춰 필요한 순간에 통신 전략을 동적으로 전환하여 고우선순위 Task의 Deadline을 보장하는 무결성 시스템을 완성.
+---
 
-License
-- This project is licensed under the MIT License - see the LICENSE file for details.
+## 4. Phase 2 — DMA 기반 아키텍처
+
+고속 통신에서의 Overrun과 CPU 소모 문제를 해결하기 위해 DMA를 도입했습니다.
+
+| DMA + IDLE Interrupt | DMA + Polling |
+|---|---|
+| <img src="./images/dma-interrupt.png"> | <img src="./images/dma-polling.png"> |
+
+### 두 방식 비교
+
+| 항목 | DMA + IDLE Interrupt | DMA + Polling (1 ms / 9 ms) |
+|---|---|---|
+| 동작 | DMA가 버퍼에 적재, 패킷 수신 후 IDLE line 감지 시 인터럽트 1회 | DMA가 Circular 링 버퍼(64 B)에 계속 적재, Task가 주기적으로 인덱스 확인 후 Batch 처리 |
+| CPU 알림 | 패킷당 1회 (4 ms마다) | 인터럽트 없음 |
+| 장점 | 패킷 도착 즉시 처리 → 응답성 높음 | Task가 원하는 시점에 처리 → 고우선순위 Task 간섭 없음 |
+| 비고 | 바이트 단위 인터럽트 대비 인터럽트 수 1/9 (이론값) | 1 ms: 4번 중 1번 데이터 있음 / 9 ms: 매번 2 ~ 3개 패킷 적재 |
+
+### 파싱 알고리즘
+
+| 기법 | 설명 |
+|---|---|
+| **Producer-Consumer** | DMA(생산자)가 CPU 개입 없이 링 버퍼에 적재하고, Task(소비자)가 주기적으로 깨어나 쌓인 만큼만 소비 |
+| **Sliding Window** | `read_idx`를 1바이트씩 옮기며 헤더(`0x59 0x59`)를 찾고, 체크섬이 틀린 패킷은 버림 |
+| **Frame Resync** | TCP처럼 경계 없는 Byte Stream에서 9바이트 프레임을 다시 조립 |
+
+<!-- TODO: 링 버퍼 크기(64 B)와 허용 가능한 최대 Polling 주기 관계 명시 (64 B ≈ 7 패킷 ≈ 28 ms) -->
+
+---
+
+## 5. Phase 3 — Multi-Tasking 환경의 문제
+
+DMA로 통신상의 데이터 유실은 해결했지만, 실제 제어 시스템에는 다음과 같은 동적 변수가 있습니다.
+
+- **다중 Task 우선순위 간섭**: 통신보다 우선순위가 높은 제어 Task들의 실행 시간이 상황에 따라 계속 변함
+- **고정 주기 처리의 낭비**: 드론·로봇은 상황에 따라 필요한 데이터 빈도가 다름(충돌 위험이 낮으면 저빈도, 근접 시 고빈도). 4 ms마다 항상 즉시 처리하는 것은 낭비
+- **검증 필요**: 제어 Task의 동적 부하와 가변 수신 주기가 섞인 환경에서 DMA + Interrupt와 DMA + Polling이 시스템 안정성에 미치는 영향 비교 필요
+
+---
+
+## 6. Roadmap
+
+### 6.1 Multi-Tasking 시나리오 실험
+
+우선순위가 높은 Dummy Task 여러 개로 부하를 만들어 SystemView로 검증할 예정입니다.
+
+| 시나리오 | 조건 | 검증할 가설 |
+|---|---|---|
+| 저부하 | 패킷 주기 길게, 제어 Task 여유 있음 | 두 방식 모두 최상위 Task에 지장 없음 |
+| 고부하 | 패킷 주기 짧게, 고우선순위 Task 실행 시간 김 | DMA + Interrupt는 간섭으로 Deadline Miss 유발, DMA + Polling은 Deadline 유지 |
+
+### 6.2 Adaptive 파이프라인
+
+| 모드 | 방식 | 동작 |
+|---|---|---|
+| 저부하 | DMA + IDLE Interrupt | 패킷 도착 즉시 처리해 빠른 응답성 확보, 패킷 주기를 길게 설정 |
+| 고부하 | DMA + Polling | UART 수신 인터럽트(IDLE 포함)를 차단하고, 넉넉한 링 버퍼로 통신 Task 주기를 늦춘 뒤 남는 시간에 Batch 처리 |
+
+<!-- TODO: 고부하 판단 기준(예: idle task 실행 비율) 정의 -->
+
+**최종 목표**: 시스템 부하와 외부 환경에 맞춰 통신 전략을 동적으로 전환해 고우선순위 Task의 Deadline을 지키는 시스템 완성
+
+### 체크리스트
+
+- [ ] 921,600 bps DMA 측정 (`sysview_record/4ms-921600bps-DMA/`)
+- [ ] 고우선순위 Dummy Task 기반 부하 실험
+- [ ] 부하 감지 및 모드 자동 전환 구현
+- [ ] 방식별 ISR 횟수 · CPU 사용률 · Deadline Miss 비교표 작성
+
+---
+
+## 7. Known Issues
+
+| 문제 | 상태 |
+|---|---|
+| STM32F4에서 보낸 TF-Luna 주기 변경 명령이 적용되지 않음 | 🔄 해결 중 |
+
+---
+
+## 8. License
+
+MIT License — [LICENSE](LICENSE) 참조
+
+<details>
+<summary>📁 SystemView 기록 파일</summary>
+
+`sysview_record/` 폴더의 `.SVDat` 파일은 SEGGER SystemView에서 `File → Load Data`로 열 수 있습니다.
+
+| 폴더 | 내용 |
+|---|---|
+| `4ms-115200bps/` | 저속 Interrupt / Polling |
+| `4ms-921600bps/` | 고속 Interrupt / Polling |
+| `4ms-115200bps-DMA/` | 저속 DMA + Interrupt, DMA + Polling (1 ms / 9 ms) |
+| `4ms-921600bps-DMA/` | 측정 예정 |
+
+</details>
