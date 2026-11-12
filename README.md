@@ -123,8 +123,9 @@ Communication|Frame Rate|Baud Rate
   - `4ms-115200bps/921600bps-DMA-Interrupt`
     - 동작 원리
       - DMA 컨트롤러가 CPU 대신 패킷을 메모리(버퍼)에 직접 옮겨주고, 패킷 1개(9바이트)가 완전히 도착했을 때 IDLE line의 HIGH를 감지해 단 한 번의 Interrupt로 CPU(Task)에 알려줌.
+      - 패킷 1개 당 IDLE 감지 Interrupt 발생 ➔ TF-Luna Frame Rate인 4ms마다 Interrupt 발생.
     - 장점
-      - Interrupt를 통해 고속 통신 환경에서 상대적으로 응답성이 높은 동시에 바이트 수신 중 CPU를 과도하게 소모하지 않고 하드웨어 Overrun(ORE)이 발생하지 않을 것으로 예정.
+      - Interrupt를 통해 고속 통신 환경에서 상대적으로 응답성이 높은 동시에 바이트 수신 중 CPU를 과도하게 소모하지 않고 Interrupt 1번 만으로 하드웨어 Overrun(ORE)이 발생하지 않을 것으로 예정.
   - `4ms-115200bps/921600bps-DMA-Polling-1ms/9ms`
     - 동작 원리
       - DMA가 백그라운드에서 패킷을 메모리(Circular 링 버퍼)에 Byte Stream으로 옮겨두고, CPU는 매번 깨어나지 않고 가끔씩(자신의 스케줄에 맞춰) 버퍼 인덱스를 확인해 쌓여 있는 데이터에 대해 Batch Processing을 진행. Polling의 주기를 1ms 또는 9ms로 설정하여 진행 중.
