@@ -73,6 +73,10 @@ Communication|Frame Rate|Baud Rate
 
 - __저속 통신 환경 (115,200bps, 주기 4ms)__
   - 바이트 도착 간격이 약 86.8 µs
+
+<img width="1328" height="400" alt="image" src="https://github.com/user-attachments/assets/2868eacb-4f8a-4a27-a935-ddc94b4db45c" />
+
+
   - __Interrupt 방식__
     - TF-Luna의 바이트 수(9 byte)만큼 하드웨어 인터럽트(RXNE)가 발생.
     - 패킷당 바이트 단위(86.8 µs 간격)로 인터럽트가 발생하여 문맥 교환 오버헤드 및 CPU 소모 발생.
