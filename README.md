@@ -3,22 +3,26 @@
 __Working in Progress...__
 
 ## Table of Contents
-1. [About The Project (프로젝트 소개)](#-about-the-project)
-2. [Motivation & Core Features (배경 및 핵심 가치)](#-motivation--core-features)
-3. [Development Environment (개발 환경)](#-development-environment)
-4. [Project Progress (진행 상황 및 문제 해결 과정)](#-project-progress)
-5. [Future Plans (향후 계획 및 최종 목표)](#-future-plans)
-6. [License (라이선스)](#license)
+1. [About The Project](#-about-the-project)
+2. [Motivation & Core Features](#-motivation--core-features)
+3. [Development Environment](#-development-environment)
+4. [Project Progress](#-project-progress)
+5. [Future Plans](#-future-plans)
+6. [License](#license)
+
+## About the Project
+극한의 시스템 부하 상황에서도 수신 인터럽트를 동적으로 제어하여, 고우선순위 제어 태스크의 마감 시간(Deadline)을 보장하는 하드 리얼타임(Hard Real-Time) 통신 파이프라인.
+- 본 프로젝트는 제한된 자원(ex. CPU Core 1개)으로 예측 불가능한 실행 고부하 상황에서 발생할 수 있는 시스템 지연을 원천 차단하기 위해 설계. 통신 패킷이 짧은 주기로 쏟아지는 환경에서도 수신 인터럽트(ISR)의 간섭을 능동적으로 통제함으로써, 고우선순위 핵심 제어 태스크가 어떠한 방해 없이 안전하게 실행 마감 시간(Deadline)을 지키도록 보장.
 
 ## Motivation & Core Features
 
 ### 배경 및 동기
-극한의 시스템 부하 상황에서도 수신 인터럽트를 동적으로 제어하여, 고우선순위 제어 태스크의 마감 시간(Deadline)을 보장하는 하드 리얼타임(Hard Real-Time) 통신 파이프라인.
-- 본 프로젝트는 제한된 자원(ex. CPU Core 1개)으로 예측 불가능한 고부하 극한 상황에서 발생할 수 있는 시스템 지연을 원천 차단하기 위해 설계. 통신 패킷이 짧은 주기로 쏟아지는 환경에서도 수신 인터럽트(ISR)의 간섭을 능동적으로 통제함으로써, 고우선순위 핵심 제어 태스크가 어떠한 방해 없이 안전하게 실행 마감 시간(Deadline)을 지키도록 보장.
+- 일반적인 임베디드 시스템은 센서 데이터 수신 시 매 바이트마다 하드웨어 인터럽트를 발생시키거나, 지속적으로 상태를 확인해야 함. 이는 통신 속도 및 주기를 높일수록 CPU 자원 낭비와 Context Switch 오버헤드를 유발. 
+- Multi-Tasking RTOS 환경에서는, 많은 수신 인터럽트가 핵심 제어 태스크들의 실행을 방해하여 Deadline을 놓치는 물제으로 이어질 수 있음.
 
 ### 핵심 해결 전략
 1. **DMA Zero-Copy 수신**: CPU 간섭 없이 DMA가 직접 메모리에 센서 데이터를 저장하여 CPU 점유율을 최소화.
-2. **무손실 슬라이딩 윈도우 파싱**: TCP/IP의 Byte Stream 원리를 차용하여, 쪼개진 패킷과 노이즈 속에서도 패킷 데이터를 재조립.
+2. **무손실 Sliding Window 파싱**: TCP/IP의 Byte Stream 원리를 이용하여, 쪼개진 패킷과 노이즈 속에서도 패킷 데이터를 재조립.
 3. **Adaptive 인터럽트 제어**: CPU 부하가 낮을 때는 빠른 응답성을 위해 인터럽트를 허용하고, 고부하 환경에서는 수신 인터럽트를 차단한 뒤 Task 기반의 Batch Processing으로 자동 전환.
 
 ## 🛠 Development Environment
