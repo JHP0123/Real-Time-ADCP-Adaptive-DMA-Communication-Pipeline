@@ -130,7 +130,7 @@
 
 ### 문제점
 
-- **CPU 낭비**: 바이트마다 인터럽트가 발생하거나(Interrupt), USART 수신 버퍼가 1바이트뿐이라 수신 내내 플래그를 감시해야 함(Polling)
+- **CPU 낭비**: 바이트마다 인터럽트가 발생하거나(Interrupt), USART 수신 버퍼가 1바이트뿐이라 수신 내내 플래그를 감시해야 함(Polling). 특히, STM32F407G-DISC1 보드는 CPU Core가 1개이므로 Multi-Tasking 환경에서 ISR 실행 시간이 부담될 수 있음.
 - **Overrun 위험**: USART 수신 버퍼가 1바이트뿐이라(하드웨어 FIFO 없음) 다음 바이트가 오기 전에 읽지 못하면 ORE 발생
 - **고속에서 더 위험**: 초당 수신 바이트 수는 같지만 바이트당 허용 시간이 86.8 µs에서 10.85 µs로 줄어, RTOS critical section이나 다른 ISR로 인해 응답이 조금만 늦어도 ORE 발생 가능
 
