@@ -202,8 +202,8 @@ DMA로 통신상의 데이터 유실은 해결했지만, 실제 제어 시스템
 - **적응형 전환 메커니즘 (Adaptive Switch)**:
   1. **부하 증가 감지**: 타겟(장애물)이 1m 이내로 근접하면, 회피 궤적 계산 및 모터 튜닝 등 최우선순위 제어 Task들의 연산량이 급증하며 실행 시간이 길어집니다. (우선순위가 높은 Dummy Task로 진행하게 되므로 LiDAR의 측정 거리가 1m 미만이 되면 점진적으로 실행 시간을 늘리는 방식으로 진행할 예정)
   3. **Deadline Miss 위험 차단**: 이때 기존의 `DMA + Interrupt` 방식을 유지하면 잦은 수신 ISR이 제어 Task를 강제로 간섭(Preemption)하여 치명적인 Deadline Miss를 유발할 수 있습니다. (Deadline을 넘긴 Dummy Task는 그 횟수를 기록)
-  4. **Interrupt 마스킹 및 Polling 전환**: 시스템은 즉각 UART 수신 인터럽트를 차단하고 `DMA + Polling` 모드로 전환합니다.
-  5. **Deadline 확보**: 고우선순위 제어 Task들이 수신 인터럽트의 간섭 없이 Deadline 내에 연산을 마치도록 합니다. 이후 하위 우선순위의 통신 Task가 스케줄링되어 깨어날 때, DMA 링 버퍼에 안전하게 쌓여있던 패킷들을 한 번에 일괄 파싱(Batch Processing)합니다.
+  4. **Interrupt 마스킹 및 Polling 전환**: 시스템은 즉각 UART 수신 인터럽트를 차단하고 `DMA + Polling` 모드로 전환
+  5. **Deadline 확보**: 고우선순위 제어 Task들이 수신 인터럽트의 간섭 없이 Deadline 내에 연산을 마치도록 합니다. 이후 하위 우선순위의 통신 Task가 스케줄링되어 깨어날 때, DMA 링 버퍼에 안전하게 쌓여있던 패킷들을 한 번에 일괄 파싱(Batch Processing)
 
 
 | 모드 | 방식 | 동작 |
